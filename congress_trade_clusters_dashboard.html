@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Congress Trade Clusters</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 2rem 1.5rem 4rem;
+    color: #1a1a1a;
+    background: #fafafa;
+  }
+  h1 { font-size: 22px; font-weight: 600; margin: 0 0 4px; }
+  .subtitle { font-size: 13px; color: #666; margin: 0 0 1.5rem; }
+  .topbar { display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; gap: 12px; margin-bottom: 1.5rem; }
+  button {
+    font-size: 13px; padding: 8px 14px; border-radius: 6px;
+    border: 1px solid #ccc; background: white; cursor: pointer;
+  }
+  button:hover { background: #f0f0f0; }
+  input[type=text], select {
+    font-size: 14px; padding: 8px 10px; border-radius: 6px;
+    border: 1px solid #ccc; background: white;
+  }
+  .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 1.5rem; }
+  .stat-card { background: white; border: 1px solid #e0e0e0; border-radius: 8px; padding: 1rem; }
+  .stat-label { font-size: 12px; color: #777; margin: 0 0 4px; }
+  .stat-value { font-size: 22px; font-weight: 600; margin: 0; }
+  .filter-row { display: flex; gap: 8px; margin-bottom: 1rem; }
+  .filter-row input { flex: 1; }
+  .cluster { border: 1px solid #e0e0e0; border-radius: 10px; margin-bottom: 10px; overflow: hidden; background: white; }
+  .cluster-header {
+    width: 100%; text-align: left; display: flex; justify-content: space-between;
+    align-items: center; padding: 12px 16px; border: none; background: white;
+    cursor: pointer; flex-wrap: wrap; gap: 8px;
+  }
+  .ticker { font-weight: 600; font-size: 15px; }
+  .asset { font-size: 13px; color: #666; }
+  .badge { font-size: 11px; padding: 2px 8px; border-radius: 10px; }
+  .badge-amber { background: #fdf3e0; color: #8a5a0a; }
+  .badge-buy { background: #e6f4ea; color: #1e7e34; }
+  .badge-sell { background: #fbe9e9; color: #a32d2d; }
+  .badge-other { background: #f0f0f0; color: #666; }
+  .meta { display: flex; align-items: center; gap: 14px; font-size: 13px; color: #555; }
+  .chev { transition: transform 0.15s; }
+  .cluster-detail { display: none; padding: 0 16px 14px; border-top: 1px solid #eee; }
+  .pol-list { font-size: 13px; color: #555; margin: 10px 0 8px; }
+  table { width: 100%; font-size: 13px; border-collapse: collapse; }
+  th { text-align: left; font-weight: 400; color: #777; padding: 4px 6px 4px 0; }
+  td { padding: 6px 6px 6px 0; border-top: 1px solid #eee; }
+  .empty { color: #777; font-size: 14px; padding: 1rem 0; }
+  .file-label { font-size: 12px; color: #777; margin-top: 6px; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div>
+    <h1>Congress trade clusters</h1>
+    <p class="subtitle" id="dataLabel">Loaded: bundled demo data (Senate, 2012-2020 historical sample)</p>
+  </div>
+  <div>
+    <input type="file" id="fileInput" accept="application/json" style="display:none;" />
+    <button id="loadBtn">Load clusters.json</button>
+    <p class="file-label">Run fetch_data.py + analyze_clusters.py, then load the output here</p>
+  </div>
+</div>
+
+<div class="stat-grid" id="statGrid"></div>
+
+<div class="filter-row">
+  <input type="text" id="searchBox" placeholder="Filter by ticker or politician..." />
+  <select id="minPolFilter">
+    <option value="0">Any cluster size</option>
+    <option value="3">3+ politicians</option>
+    <option value="4">4+ politicians</option>
+    <option value="5">5+ politicians</option>
+  </select>
+</div>
+
+<div id="clusterList"></div>
+
+<script>
+const DEMO_CLUSTERS = [{"ticker": "AAPL", "asset": "Apple Inc.", "num_politicians": 5, "politicians": ["Jerry Moran", "Pat Roberts", "Patrick J Toomey", "Ron L Wyden", "William Cassidy"], "num_trades": 9, "buy_count": 4, "sell_count": 5, "same_direction": false, "window_start": "2020-08-19", "window_end": "2020-09-02", "spread_days": 14, "trades": [{"politician": "William Cassidy", "chamber": "senate", "date": "2020-08-19", "direction": "sell", "amount": "$1,001 - $15,000", "owner": "Spouse"}, {"politician": "Jerry Moran", "chamber": "senate", "date": "2020-08-21", "direction": "sell", "amount": "$1,001 - $15,000", "owner": "Spouse"}, {"politician": "Jerry Moran", "chamber": "senate", "date": "2020-08-21", "direction": "sell", "amount": "$1,001 - $15,000", "owner": "Self"}, {"politician": "Ron L Wyden", "chamber": "senate", "date": "2020-08-27", "direction": "buy", "amount": "$50,001 - $100,000", "owner": "Spouse"}, {"politician": "Patrick J Toomey", "chamber": "senate", "date": "2020-08-27", "direction": "buy", "amount": "$1,001 - $15,000", "owner": "Child"}, {"politician": "Pat Roberts", "chamber": "senate", "date": "2020-08-27", "direction": "sell", "amount": "$50,001 - $100,000", "owner": "Spouse"}, {"politician": "Pat Roberts", "chamber": "senate", "date": "2020-08-27", "direction": "sell", "amount": "$50,001 - $100,000", "owner": "Spouse"}, {"politician": "Pat Roberts", "chamber": "senate", "date": "2020-09-02", "direction": "buy", "amount": "$50,001 - $100,000", "owner": "Spouse"}, {"politician": "Ron L Wyden", "chamber": "senate", "date": "2020-09-02", "direction": "buy", "amount": "$50,001 - $100,000", "owner": "Spouse"}]}, {"ticker": "AAPL", "asset": "Apple Inc.", "num_politicians": 4, "politicians": ["David A Perdue , Jr", "Jerry Moran", "Sheldon Whitehouse", "William Cassidy"], "num_trades": 9, "buy_count": 8, "sell_count": 1, "same_direction": false, "window_start": "2018-11-27", "window_end": "2018-12-07", "spread_days": 10, "trades": [{"politician": "David A Perdue , Jr", "chamber": "senate", "date": "2018-11-27", "direction": "buy", "amount": "$1,001 - $15,000", "owner": "Joint"}, {"politician": "David A Perdue , Jr", "chamber": "senate", "date": "2018-11-27", "direction": "buy", "amount": "$1,001 - $15,000", "owner": "Joint"}, {"politician": "David A Perdue , Jr", "chamber": "senate", "date": "2018-11-27", "direction": "buy", "amount": "$1,001 - $15,000", "owner": "Joint"}, {"politician": "David A Perdue , Jr", "chamber": "senate", "date": "2018-11-27", "direction": "buy", "amount": "$1,001 - $15,000", "owner": "Joint"}, {"politician": "David A Perdue , Jr", "chamber": "senate", "date": "2018-11-27", "direction": "buy", "amount": "$1,001 - $15,000", "owner": "Joint"}, {"politician": "Sheldon Whitehouse", "chamber": "senate", "date": "2018-12-04", "direction": "sell", "amount": "$15,001 - $50,000", "owner": "Self"}, {"politician": "Jerry Moran", "chamber": "senate", "date": "2018-12-06", "direction": "buy", "amount": "$1,001 - $15,000", "owner": "Spouse"}, {"politician": "Jerry Moran", "chamber": "senate", "date": "2018-12-06", "direction": "buy", "amount": "$1,001 - $15,000", "owner": "Self"}, {"politician": "William Cassidy", "chamber": "senate", "date": "2018-12-07", "direction": "buy", "amount": "$1,001 - $15,000", "owner": "Spouse"}]}, {"ticker": "DIS", "asset": "The Walt Disney Company", "num_politicians": 4, "politicians": ["Kelly Loeffler", "Pat Roberts", "Ron L Wyden", "Thomas R Carper"], "num_trades": 6, "buy_count": 5, "sell_count": 1, "same_direction": false, "window_start": "2020-03-24", "window_end": "2020-04-07", "spread_days": 14, "trades": [{"politician": "Pat Roberts", "chamber": "senate", "date": "2020-03-24", "direction": "buy", "amount": "$1,001 - $15,000", "owner": "Spouse"}, {"politician": "Thomas R Carper", "chamber": "senate", "date": "2020-03-27", "direction": "buy", "amount": "$1,001 - $15,000", "owner": "Spouse"}, {"politician": "Ron L Wyden", "chamber": "senate", "date": "2020-04-06", "direction": "buy", "amount": "$50,001 - $100,000", "owner": "Spouse"}, {"politician": "Pat Roberts", "chamber": "senate", "date": "2020-04-07", "direction": "buy", "amount": "$1,001 - $15,000", "owner": "Spouse"}, {"politician": "Kelly Loeffler", "chamber": "senate", "date": "2020-04-07", "direction": "sell", "amount": "$100,001 - $250,000", "owner": "Joint"}, {"politician": "Kelly Loeffler", "chamber": "senate", "date": "2020-04-07", "direction": "buy", "amount": "$50,001 - $100,000", "owner": "Spouse"}]}, {"ticker": "BMY", "asset": "Bristol-Myers Squibb Company", "num_politicians": 4, "politicians": ["David A Perdue , Jr", "James M Inhofe", "John Hoeven", "Sheldon Whitehouse"], "num_trades": 4, "buy_count": 3, "sell_count": 1, "same_direction": false, "window_start": "2016-08-08", "window_end": "2016-08-22", "spread_days": 14, "trades": [{"politician": "James M Inhofe", "chamber": "senate", "date": "2016-08-08", "direction": "buy", "amount": "$15,001 - $50,000", "owner": "Self"}, {"politician": "David A Perdue , Jr", "chamber": "senate", "date": "2016-08-11", "direction": "buy", "amount": "$1,001 - $15,000", "owner": "Joint"}, {"politician": "Sheldon Whitehouse", "chamber": "senate", "date": "2016-08-18", "direction": "sell", "amount": "$1,001 - $15,000", "owner": "Child"}, {"politician": "John Hoeven", "chamber": "senate", "date": "2016-08-22", "direction": "buy", "amount": "$50,001 - $100,000", "owner": "Self"}]}, {"ticker": "PG", "asset": "The Procter &amp; Gamble Company", "num_politicians": 3, "politicians": ["David A Perdue , Jr", "Shelley M Capito", "William Cassidy"], "num_trades": 3, "buy_count": 3, "sell_count": 0, "same_direction": true, "window_start": "2018-04-20", "window_end": "2018-04-24", "spread_days": 4, "trades": [{"politician": "David A Perdue , Jr", "chamber": "senate", "date": "2018-04-20", "direction": "buy", "amount": "$15,001 - $50,000", "owner": "Joint"}, {"politician": "William Cassidy", "chamber": "senate", "date": "2018-04-23", "direction": "buy", "amount": "$1,001 - $15,000", "owner": "Spouse"}, {"politician": "Shelley M Capito", "chamber": "senate", "date": "2018-04-24", "direction": "buy", "amount": "$1,001 - $15,000", "owner": "Spouse"}]}, {"ticker": "RTN", "asset": "Raytheon Company", "num_politicians": 3, "politicians": ["Kelly Loeffler", "Shelley M Capito", "Thomas R Carper"], "num_trades": 3, "buy_count": 1, "sell_count": 0, "same_direction": true, "window_start": "2020-04-02", "window_end": "2020-04-07", "spread_days": 5, "trades": [{"politician": "Thomas R Carper", "chamber": "senate", "date": "2020-04-02", "direction": "buy", "amount": "$1,001 - $15,000", "owner": "Spouse"}, {"politician": "Kelly Loeffler", "chamber": "senate", "date": "2020-04-03", "direction": "other", "amount": "$100,001 - $250,000", "owner": "Joint"}, {"politician": "Shelley M Capito", "chamber": "senate", "date": "2020-04-07", "direction": "other", "amount": "$15,001 - $50,000", "owner": "Spouse"}]}, {"ticker": "MSFT", "asset": "Microsoft Corporation", "num_politicians": 3, "politicians": ["David A Perdue , Jr", "James M Inhofe", "Kelly Loeffler"], "num_trades": 4, "buy_count": 0, "sell_count": 4, "same_direction": true, "window_start": "2020-04-07", "window_end": "2020-04-16", "spread_days": 9, "trades": [{"politician": "Kelly Loeffler", "chamber": "senate", "date": "2020-04-07", "direction": "sell", "amount": "$250,001 - $500,000", "owner": "Joint"}, {"politician": "James M Inhofe", "chamber": "senate", "date": "2020-04-13", "direction": "sell", "amount": "$50,001 - $100,000", "owner": "Self"}, {"politician": "David A Perdue , Jr", "chamber": "senate", "date": "2020-04-14", "direction": "sell", "amount": "$15,001 - $50,000", "owner": "Joint"}, {"politician": "David A Perdue , Jr", "chamber": "senate", "date": "2020-04-16", "direction": "sell", "amount": "$50,001 - $100,000", "owner": "Joint"}]}, {"ticker": "DHR", "asset": "Danaher Corporation", "num_politicians": 3, "politicians": ["James M Inhofe", "John F Reed", "Shelley M Capito"], "num_trades": 3, "buy_count": 0, "sell_count": 3, "same_direction": true, "window_start": "2019-02-28", "window_end": "2019-03-11", "spread_days": 11, "trades": [{"politician": "John F Reed", "chamber": "senate", "date": "2019-02-28", "direction": "sell", "amount": "$1,001 - $15,000", "owner": "Self"}, {"politician": "James M Inhofe", "chamber": "senate", "date": "2019-03-01", "direction": "sell", "amount": "$15,001 - $50,000", "owner": "Self"}, {"politician": "Shelley M Capito", "chamber": "senate", "date": "2019-03-11", "direction": "sell", "amount": "$1,001 - $15,000", "owner": "Spouse"}]}, {"ticker": "MSFT", "asset": "Microsoft Corporation", "num_politicians": 3, "politicians": ["David A Perdue , Jr", "John F Reed", "Shelley M Capito"], "num_trades": 3, "buy_count": 0, "sell_count": 3, "same_direction": true, "window_start": "2019-02-25", "window_end": "2019-03-11", "spread_days": 14, "trades": [{"politician": "David A Perdue , Jr", "chamber": "senate", "date": "2019-02-25", "direction": "sell", "amount": "$15,001 - $50,000", "owner": "Joint"}, {"politician": "John F Reed", "chamber": "senate", "date": "2019-02-28", "direction": "sell", "amount": "$1,001 - $15,000", "owner": "Self"}, {"politician": "Shelley M Capito", "chamber": "senate", "date": "2019-03-11", "direction": "sell", "amount": "$1,001 - $15,000", "owner": "Spouse"}]}, {"ticker": "DWDP", "asset": "DD - E I duPont de Nemours &amp; Co (Exchanged) <br> DowDuPont Inc. (Received)", "num_politicians": 3, "politicians": ["David A Perdue , Jr", "Gary C Peters", "Ladda Tammy Duckworth"], "num_trades": 4, "buy_count": 0, "sell_count": 0, "same_direction": false, "window_start": "2017-09-01", "window_end": "2017-09-01", "spread_days": 0, "trades": [{"politician": "Ladda Tammy Duckworth", "chamber": "senate", "date": "2017-09-01", "direction": "other", "amount": "$1,001 - $15,000", "owner": "Joint"}, {"politician": "Gary C Peters", "chamber": "senate", "date": "2017-09-01", "direction": "other", "amount": "$15,001 - $50,000", "owner": "Self"}, {"politician": "Gary C Peters", "chamber": "senate", "date": "2017-09-01", "direction": "other", "amount": "$15,001 - $50,000", "owner": "Self"}, {"politician": "David A Perdue , Jr", "chamber": "senate", "date": "2017-09-01", "direction": "other", "amount": "$15,001 - $50,000", "owner": "Joint"}]}, {"ticker": "DIS", "asset": "The Walt Disney Company", "num_politicians": 3, "politicians": ["David A Perdue , Jr", "Ron L Wyden", "Thomas R Carper"], "num_trades": 7, "buy_count": 2, "sell_count": 5, "same_direction": false, "window_start": "2020-04-14", "window_end": "2020-04-17", "spread_days": 3, "trades": [{"politician": "David A Perdue , Jr", "chamber": "senate", "date": "2020-04-14", "direction": "sell", "amount": "$100,001 - $250,000", "owner": "Joint"}, {"politician": "David A Perdue , Jr", "chamber": "senate", "date": "2020-04-14", "direction": "sell", "amount": "$15,001 - $50,000", "owner": "Joint"}, {"politician": "David A Perdue , Jr", "chamber": "senate", "date": "2020-04-14", "direction": "sell", "amount": "$15,001 - $50,000", "owner": "Joint"}, {"politician": "David A Perdue , Jr", "chamber": "senate", "date": "2020-04-14", "direction": "sell", "amount": "$15,001 - $50,000", "owner": "Joint"}, {"politician": "Thomas R Carper", "chamber": "senate", "date": "2020-04-14", "direction": "buy", "amount": "$1,001 - $15,000", "owner": "Spouse"}, {"politician": "David A Perdue , Jr", "chamber": "senate", "date": "2020-04-16", "direction": "sell", "amount": "$1,001 - $15,000", "owner": "Joint"}, {"politician": "Ron L Wyden", "chamber": "senate", "date": "2020-04-17", "direction": "buy", "amount": "$50,001 - $100,000", "owner": "Spouse"}]}, {"ticker": "PEP", "asset": "PepsiCo, Inc.", "num_politicians": 3, "politicians": ["David A Perdue , Jr", "John F Reed", "Sheldon Whitehouse"], "num_trades": 3, "buy_count": 1, "sell_count": 2, "same_direction": false, "window_start": "2019-02-25", "window_end": "2019-02-28", "spread_days": 3, "trades": [{"politician": "David A Perdue , Jr", "chamber": "senate", "date": "2019-02-25", "direction": "sell", "amount": "$15,001 - $50,000", "owner": "Joint"}, {"politician": "Sheldon Whitehouse", "chamber": "senate", "date": "2019-02-27", "direction": "buy", "amount": "$1,001 - $15,000", "owner": "Joint"}, {"politician": "John F Reed", "chamber": "senate", "date": "2019-02-28", "direction": "sell", "amount": "$1,001 - $15,000", "owner": "Self"}]}, {"ticker": "V", "asset": "Visa Inc.", "num_politicians": 3, "politicians": ["David A Perdue , Jr", "James M Inhofe", "Ron L Wyden"], "num_trades": 3, "buy_count": 1, "sell_count": 2, "same_direction": false, "window_start": "2020-04-06", "window_end": "2020-04-14", "spread_days": 8, "trades": [{"politician": "Ron L Wyden", "chamber": "senate", "date": "2020-04-06", "direction": "buy", "amount": "$15,001 - $50,000", "owner": "Spouse"}, {"politician": "James M Inhofe", "chamber": "senate", "date": "2020-04-13", "direction": "sell", "amount": "$50,001 - $100,000", "owner": "Self"}, {"politician": "David A Perdue , Jr", "chamber": "senate", "date": "2020-04-14", "direction": "sell", "amount": "$15,001 - $50,000", "owner": "Joint"}]}, {"ticker": "CSCO", "asset": "Cisco Systems, Inc.", "num_politicians": 3, "politicians": ["David A Perdue , Jr", "Kelly Loeffler", "Ron L Wyden"], "num_trades": 8, "buy_count": 2, "sell_count": 6, "same_direction": false, "window_start": "2020-04-06", "window_end": "2020-04-14", "spread_days": 8, "trades": [{"politician": "Ron L Wyden", "chamber": "senate", "date": "2020-04-06", "direction": "buy", "amount": "$15,001 - $50,000", "owner": "Spouse"}, {"politician": "Kelly Loeffler", "chamber": "senate", "date": "2020-04-07", "direction": "sell", "amount": "$100,001 - $250,000", "owner": "Joint"}, {"politician": "Kelly Loeffler", "chamber": "senate", "date": "2020-04-07", "direction": "buy", "amount": "$15,001 - $50,000", "owner": "Spouse"}, {"politician": "Kelly Loeffler", "chamber": "senate", "date": "2020-04-07", "direction": "sell", "amount": "$100,001 - $250,000", "owner": "Spouse"}, {"politician": "David A Perdue , Jr", "chamber": "senate", "date": "2020-04-14", "direction": "sell", "amount": "$15,001 - $50,000", "owner": "Joint"}, {"politician": "David A Perdue , Jr", "chamber": "senate", "date": "2020-04-14", "direction": "sell", "amount": "$15,001 - $50,000", "owner": "Joint"}, {"politician": "David A Perdue , Jr", "chamber": "senate", "date": "2020-04-14", "direction": "sell", "amount": "$15,001 - $50,000", "owner": "Joint"}, {"politician": "Kelly Loeffler", "chamber": "senate", "date": "2020-04-14", "direction": "sell", "amount": "$100,001 - $250,000", "owner": "Spouse"}]}, {"ticker": "AAPL", "asset": "Apple Inc.", "num_politicians": 3, "politicians": ["David A Perdue , Jr", "Kelly Loeffler", "Pat Roberts"], "num_trades": 7, "buy_count": 2, "sell_count": 5, "same_direction": false, "window_start": "2020-04-07", "window_end": "2020-04-16", "spread_days": 9, "trades": [{"politician": "Kelly Loeffler", "chamber": "senate", "date": "2020-04-07", "direction": "sell", "amount": "$250,001 - $500,000", "owner": "Joint"}, {"politician": "Pat Roberts", "chamber": "senate", "date": "2020-04-08", "direction": "buy", "amount": "$1,001 - $15,000", "owner": "Spouse"}, {"politician": "Pat Roberts", "chamber": "senate", "date": "2020-04-08", "direction": "buy", "amount": "$1,001 - $15,000", "owner": "Spouse"}, {"politician": "David A Perdue , Jr", "chamber": "senate", "date": "2020-04-14", "direction": "sell", "amount": "$15,001 - $50,000", "owner": "Joint"}, {"politician": "David A Perdue , Jr", "chamber": "senate", "date": "2020-04-14", "direction": "sell", "amount": "$50,001 - $100,000", "owner": "Joint"}, {"politician": "David A Perdue , Jr", "chamber": "senate", "date": "2020-04-14", "direction": "sell", "amount": "$15,001 - $50,000", "owner": "Joint"}, {"politician": "David A Perdue , Jr", "chamber": "senate", "date": "2020-04-16", "direction": "sell", "amount": "$15,001 - $50,000", "owner": "Joint"}]}, {"ticker": "XOM", "asset": "Exxon Mobil Corporation", "num_politicians": 3, "politicians": ["James M Inhofe", "Shelley M Capito", "William Cassidy"], "num_trades": 3, "buy_count": 2, "sell_count": 1, "same_direction": false, "window_start": "2018-04-24", "window_end": "2018-05-03", "spread_days": 9, "trades": [{"politician": "Shelley M Capito", "chamber": "senate", "date": "2018-04-24", "direction": "buy", "amount": "$1,001 - $15,000", "owner": "Spouse"}, {"politician": "William Cassidy", "chamber": "senate", "date": "2018-04-25", "direction": "buy", "amount": "$1,001 - $15,000", "owner": "Spouse"}, {"politician": "James M Inhofe", "chamber": "senate", "date": "2018-05-03", "direction": "sell", "amount": "$50,001 - $100,000", "owner": "Self"}]}, {"ticker": "PYPL", "asset": "PayPal Holdings, Inc.", "num_politicians": 3, "politicians": ["David A Perdue , Jr", "Ron L Wyden", "Thomas R Carper"], "num_trades": 5, "buy_count": 2, "sell_count": 3, "same_direction": false, "window_start": "2020-04-14", "window_end": "2020-04-23", "spread_days": 9, "trades": [{"politician": "David A Perdue , Jr", "chamber": "senate", "date": "2020-04-14", "direction": "sell", "amount": "$15,001 - $50,000", "owner": "Joint"}, {"politician": "David A Perdue , Jr", "chamber": "senate", "date": "2020-04-14", "direction": "sell", "amount": "$15,001 - $50,000", "owner": "Joint"}, {"politician": "Thomas R Carper", "chamber": "senate", "date": "2020-04-14", "direction": "buy", "amount": "$1,001 - $15,000", "owner": "Spouse"}, {"politician": "David A Perdue , Jr", "chamber": "senate", "date": "2020-04-16", "direction": "sell", "amount": "$1,001 - $15,000", "owner": "Joint"}, {"politician": "Ron L Wyden", "chamber": "senate", "date": "2020-04-23", "direction": "buy", "amount": "$50,001 - $100,000", "owner": "Spouse"}]}, {"ticker": "MSFT", "asset": "Microsoft Corporation", "num_politicians": 3, "politicians": ["James M Inhofe", "Shelley M Capito", "William Cassidy"], "num_trades": 3, "buy_count": 1, "sell_count": 2, "same_direction": false, "window_start": "2018-04-23", "window_end": "2018-05-03", "spread_days": 10, "trades": [{"politician": "William Cassidy", "chamber": "senate", "date": "2018-04-23", "direction": "sell", "amount": "$1,001 - $15,000", "owner": "Spouse"}, {"politician": "Shelley M Capito", "chamber": "senate", "date": "2018-04-24", "direction": "buy", "amount": "$1,001 - $15,000", "owner": "Spouse"}, {"politician": "James M Inhofe", "chamber": "senate", "date": "2018-05-03", "direction": "sell", "amount": "$15,001 - $50,000", "owner": "Self"}]}, {"ticker": "CAT", "asset": "Caterpillar Inc.", "num_politicians": 3, "politicians": ["David A Perdue , Jr", "Kelly Loeffler", "Ron L Wyden"], "num_trades": 5, "buy_count": 3, "sell_count": 2, "same_direction": false, "window_start": "2020-04-06", "window_end": "2020-04-16", "spread_days": 10, "trades": [{"politician": "Ron L Wyden", "chamber": "senate", "date": "2020-04-06", "direction": "buy", "amount": "$15,001 - $50,000", "owner": "Spouse"}, {"politician": "Kelly Loeffler", "chamber": "senate", "date": "2020-04-07", "direction": "buy", "amount": "$15,001 - $50,000", "owner": "Spouse"}, {"politician": "Kelly Loeffler", "chamber": "senate", "date": "2020-04-07", "direction": "buy", "amount": "$15,001 - $50,000", "owner": "Spouse"}, {"politician": "Kelly Loeffler", "chamber": "senate", "date": "2020-04-14", "direction": "sell", "amount": "$100,001 - $250,000", "owner": "Self"}, {"politician": "David A Perdue , Jr", "chamber": "senate", "date": "2020-04-16", "direction": "sell", "amount": "$1,001 - $15,000", "owner": "Joint"}]}, {"ticker": "BLK", "asset": "BlackRock, Inc.", "num_politicians": 3, "politicians": ["James M Inhofe", "Shelley M Capito", "William Cassidy"], "num_trades": 3, "buy_count": 1, "sell_count": 2, "same_direction": false, "window_start": "2018-04-23", "window_end": "2018-05-03", "spread_days": 10, "trades": [{"politician": "William Cassidy", "chamber": "senate", "date": "2018-04-23", "direction": "sell", "amount": "$1,001 - $15,000", "owner": "Spouse"}, {"politician": "Shelley M Capito", "chamber": "senate", "date": "2018-04-24", "direction": "buy", "amount": "$1,001 - $15,000", "owner": "Spouse"}, {"politician": "James M Inhofe", "chamber": "senate", "date": "2018-05-03", "direction": "sell", "amount": "$15,001 - $50,000", "owner": "Self"}]}, {"ticker": "AAPL", "asset": "Apple Inc.", "num_politicians": 3, "politicians": ["David A Perdue , Jr", "Pat Roberts", "Patty Murray"], "num_trades": 5, "buy_count": 1, "sell_count": 4, "same_direction": false, "window_start": "2017-06-09", "window_end": "2017-06-20", "spread_days": 11, "trades": [{"politician": "David A Perdue , Jr", "chamber": "senate", "date": "2017-06-09", "direction": "sell", "amount": "$15,001 - $50,000", "owner": "Joint"}, {"politician": "Pat Roberts", "chamber": "senate", "date": "2017-06-12", "direction": "sell", "amount": "$15,001 - $50,000", "owner": "Spouse"}, {"politician": "Pat Roberts", "chamber": "senate", "date": "2017-06-12", "direction": "sell", "amount": "$50,001 - $100,000", "owner": "Spouse"}, {"politician": "Patty Murray", "chamber": "senate", "date": "2017-06-15", "direction": "sell", "amount": "$1,001 - $15,000", "owner": "Spouse"}, {"politician": "Pat Roberts", "chamber": "senate", "date": "2017-06-20", "direction": "buy", "amount": "$15,001 - $50,000", "owner": "Spouse"}]}, {"ticker": "AAPL", "asset": "Apple Inc.", "num_politicians": 3, "politicians": ["James M Inhofe", "Ron L Wyden", "Thomas R Carper"], "num_trades": 5, "buy_count": 3, "sell_count": 2, "same_direction": false, "window_start": "2020-07-09", "window_end": "2020-07-20", "spread_days": 11, "trades": [{"politician": "Thomas R Carper", "chamber": "senate", "date": "2020-07-09", "direction": "sell", "amount": "$1,001 - $15,000", "owner": "Spouse"}, {"politician": "Ron L Wyden", "chamber": "senate", "date": "2020-07-13", "direction": "buy", "amount": "$15,001 - $50,000", "owner": "Spouse"}, {"politician": "Ron L Wyden", "chamber": "senate", "date": "2020-07-15", "direction": "buy", "amount": "$15,001 - $50,000", "owner": "Spouse"}, {"politician": "James M Inhofe", "chamber": "senate", "date": "2020-07-15", "direction": "sell", "amount": "$15,001 - $50,000", "owner": "Self"}, {"politician": "Ron L Wyden", "chamber": "senate", "date": "2020-07-20", "direction": "buy", "amount": "$15,001 - $50,000", "owner": "Spouse"}]}, {"ticker": "T", "asset": "AT&amp;T Inc.", "num_politicians": 3, "politicians": ["David A Perdue , Jr", "Kelly Loeffler", "Ron L Wyden"], "num_trades": 4, "buy_count": 2, "sell_count": 2, "same_direction": false, "window_start": "2020-04-06", "window_end": "2020-04-17", "spread_days": 11, "trades": [{"politician": "Ron L Wyden", "chamber": "senate", "date": "2020-04-06", "direction": "buy", "amount": "$1,001 - $15,000", "owner": "Spouse"}, {"politician": "Kelly Loeffler", "chamber": "senate", "date": "2020-04-07", "direction": "sell", "amount": "$100,001 - $250,000", "owner": "Joint"}, {"politician": "David A Perdue , Jr", "chamber": "senate", "date": "2020-04-16", "direction": "sell", "amount": "$1,001 - $15,000", "owner": "Joint"}, {"politician": "Ron L Wyden", "chamber": "senate", "date": "2020-04-17", "direction": "buy", "amount": "$15,001 - $50,000", "owner": "Spouse"}]}, {"ticker": "CVS", "asset": "CVS Health Corporation", "num_politicians": 3, "politicians": ["Jerry Moran", "Thomas R Tillis", "William Cassidy"], "num_trades": 4, "buy_count": 2, "sell_count": 2, "same_direction": false, "window_start": "2018-12-07", "window_end": "2018-12-20", "spread_days": 13, "trades": [{"politician": "William Cassidy", "chamber": "senate", "date": "2018-12-07", "direction": "sell", "amount": "$1,001 - $15,000", "owner": "Spouse"}, {"politician": "Jerry Moran", "chamber": "senate", "date": "2018-12-19", "direction": "buy", "amount": "$1,001 - $15,000", "owner": "Spouse"}, {"politician": "Jerry Moran", "chamber": "senate", "date": "2018-12-19", "direction": "buy", "amount": "$1,001 - $15,000", "owner": "Self"}, {"politician": "Thomas R Tillis", "chamber": "senate", "date": "2018-12-20", "direction": "sell", "amount": "$1,001 - $15,000", "owner": "Joint"}]}, {"ticker": "C", "asset": "Citigroup Inc.", "num_politicians": 3, "politicians": ["David A Perdue , Jr", "James M Inhofe", "Sheldon Whitehouse"], "num_trades": 3, "buy_count": 2, "sell_count": 1, "same_direction": false, "window_start": "2018-04-24", "window_end": "2018-05-07", "spread_days": 13, "trades": [{"politician": "David A Perdue , Jr", "chamber": "senate", "date": "2018-04-24", "direction": "buy", "amount": "$1,001 - $15,000", "owner": "Joint"}, {"politician": "James M Inhofe", "chamber": "senate", "date": "2018-05-03", "direction": "sell", "amount": "$1,001 - $15,000", "owner": "Self"}, {"politician": "Sheldon Whitehouse", "chamber": "senate", "date": "2018-05-07", "direction": "buy", "amount": "$1,001 - $15,000", "owner": "Joint"}]}, {"ticker": "PEP", "asset": "PepsiCo, Inc.", "num_politicians": 3, "politicians": ["David A Perdue , Jr", "James M Inhofe", "Shelley M Capito"], "num_trades": 3, "buy_count": 2, "sell_count": 1, "same_direction": false, "window_start": "2018-04-20", "window_end": "2018-05-03", "spread_days": 13, "trades": [{"politician": "David A Perdue , Jr", "chamber": "senate", "date": "2018-04-20", "direction": "buy", "amount": "$15,001 - $50,000", "owner": "Joint"}, {"politician": "Shelley M Capito", "chamber": "senate", "date": "2018-04-24", "direction": "buy", "amount": "$1,001 - $15,000", "owner": "Spouse"}, {"politician": "James M Inhofe", "chamber": "senate", "date": "2018-05-03", "direction": "sell", "amount": "$15,001 - $50,000", "owner": "Self"}]}, {"ticker": "PG", "asset": "The Procter &amp; Gamble Company", "num_politicians": 3, "politicians": ["David A Perdue , Jr", "Shelley M Capito", "William Cassidy"], "num_trades": 3, "buy_count": 1, "sell_count": 2, "same_direction": false, "window_start": "2018-12-07", "window_end": "2018-12-20", "spread_days": 13, "trades": [{"politician": "William Cassidy", "chamber": "senate", "date": "2018-12-07", "direction": "sell", "amount": "$1,001 - $15,000", "owner": "Spouse"}, {"politician": "Shelley M Capito", "chamber": "senate", "date": "2018-12-13", "direction": "buy", "amount": "$1,001 - $15,000", "owner": "Spouse"}, {"politician": "David A Perdue , Jr", "chamber": "senate", "date": "2018-12-20", "direction": "sell", "amount": "$1,001 - $15,000", "owner": "Joint"}]}, {"ticker": "AAPL", "asset": "Apple Inc.", "num_politicians": 3, "politicians": ["David A Perdue , Jr", "Jerry Moran", "Pat Roberts"], "num_trades": 4, "buy_count": 1, "sell_count": 3, "same_direction": false, "window_start": "2019-09-19", "window_end": "2019-10-03", "spread_days": 14, "trades": [{"politician": "David A Perdue , Jr", "chamber": "senate", "date": "2019-09-19", "direction": "sell", "amount": "$15,001 - $50,000", "owner": "Joint"}, {"politician": "Jerry Moran", "chamber": "senate", "date": "2019-09-25", "direction": "sell", "amount": "$1,001 - $15,000", "owner": "Spouse"}, {"politician": "Jerry Moran", "chamber": "senate", "date": "2019-09-25", "direction": "sell", "amount": "$1,001 - $15,000", "owner": "Self"}, {"politician": "Pat Roberts", "chamber": "senate", "date": "2019-10-03", "direction": "buy", "amount": "$15,001 - $50,000", "owner": "Spouse"}]}, {"ticker": "MSFT", "asset": "Microsoft Corporation", "num_politicians": 3, "politicians": ["Kelly Loeffler", "Pat Roberts", "Thomas R Carper"], "num_trades": 4, "buy_count": 3, "sell_count": 1, "same_direction": false, "window_start": "2020-03-19", "window_end": "2020-04-02", "spread_days": 14, "trades": [{"politician": "Kelly Loeffler", "chamber": "senate", "date": "2020-03-19", "direction": "buy", "amount": "$15,001 - $50,000", "owner": "Joint"}, {"politician": "Pat Roberts", "chamber": "senate", "date": "2020-03-24", "direction": "buy", "amount": "$1,001 - $15,000", "owner": "Spouse"}, {"politician": "Pat Roberts", "chamber": "senate", "date": "2020-03-26", "direction": "buy", "amount": "$1,001 - $15,000", "owner": "Spouse"}, {"politician": "Thomas R Carper", "chamber": "senate", "date": "2020-04-02", "direction": "sell", "amount": "$1,001 - $15,000", "owner": "Spouse"}]}, {"ticker": "T", "asset": "AT&amp;T Inc.", "num_politicians": 3, "politicians": ["David A Perdue , Jr", "John Hoeven", "Sheldon Whitehouse"], "num_trades": 3, "buy_count": 2, "sell_count": 1, "same_direction": false, "window_start": "2018-06-13", "window_end": "2018-06-27", "spread_days": 14, "trades": [{"politician": "Sheldon Whitehouse", "chamber": "senate", "date": "2018-06-13", "direction": "buy", "amount": "$1,001 - $15,000", "owner": "Joint"}, {"politician": "David A Perdue , Jr", "chamber": "senate", "date": "2018-06-19", "direction": "sell", "amount": "$1,001 - $15,000", "owner": "Joint"}, {"politician": "John Hoeven", "chamber": "senate", "date": "2018-06-27", "direction": "buy", "amount": "$50,001 - $100,000", "owner": "Self"}]}];
+
+let currentData = DEMO_CLUSTERS;
+
+function renderStats(clusters) {
+  const tickers = new Set(clusters.map(c => c.ticker));
+  const pols = new Set();
+  clusters.forEach(c => c.politicians.forEach(p => pols.add(p)));
+  const sameDir = clusters.filter(c => c.same_direction).length;
+  const stats = [
+    { label: 'Clusters found', value: clusters.length },
+    { label: 'Distinct tickers', value: tickers.size },
+    { label: 'Politicians involved', value: pols.size },
+    { label: 'Same-direction clusters', value: sameDir },
+  ];
+  document.getElementById('statGrid').innerHTML = stats.map(s =>
+    `<div class="stat-card"><p class="stat-label">${s.label}</p><p class="stat-value">${s.value}</p></div>`
+  ).join('');
+}
+
+function dirBadge(dir) {
+  if (dir === 'buy') return '<span class="badge badge-buy">buy</span>';
+  if (dir === 'sell') return '<span class="badge badge-sell">sell</span>';
+  return '<span class="badge badge-other">other</span>';
+}
+
+function renderClusters(clusters) {
+  const list = document.getElementById('clusterList');
+  if (clusters.length === 0) {
+    list.innerHTML = '<p class="empty">No clusters match your filter.</p>';
+    return;
+  }
+  list.innerHTML = clusters.map((c, idx) => `
+    <div class="cluster">
+      <button class="cluster-header" data-idx="${idx}">
+        <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+          <span class="ticker">${c.ticker}</span>
+          <span class="asset">${c.asset}</span>
+          ${c.same_direction ? '<span class="badge badge-amber">same direction</span>' : ''}
+        </div>
+        <div class="meta">
+          <span>${c.window_start} &ndash; ${c.window_end}</span>
+          <span style="font-weight:500;">${c.num_politicians} politicians</span>
+          <span class="chev">&#9660;</span>
+        </div>
+      </button>
+      <div class="cluster-detail" data-idx="${idx}">
+        <p class="pol-list">${c.politicians.join(', ')}</p>
+        <table>
+          <thead><tr>
+            <th>Politician</th><th>Date</th><th>Direction</th><th>Amount</th><th>Owner</th>
+          </tr></thead>
+          <tbody>
+            ${c.trades.map(t => `<tr>
+              <td>${t.politician}</td>
+              <td>${t.date}</td>
+              <td>${dirBadge(t.direction)}</td>
+              <td>${t.amount}</td>
+              <td style="color:#777;">${t.owner}</td>
+            </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `).join('');
+
+  document.querySelectorAll('.cluster-header').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const idx = btn.getAttribute('data-idx');
+      const detail = document.querySelector(`.cluster-detail[data-idx="${idx}"]`);
+      const chev = btn.querySelector('.chev');
+      const open = detail.style.display !== 'none' && detail.style.display !== '';
+      detail.style.display = open ? 'none' : 'block';
+      chev.style.transform = open ? 'rotate(0deg)' : 'rotate(180deg)';
+    });
+  });
+}
+
+function applyFilters() {
+  const q = document.getElementById('searchBox').value.trim().toLowerCase();
+  const minPol = parseInt(document.getElementById('minPolFilter').value, 10);
+  let filtered = currentData.filter(c => c.num_politicians >= minPol);
+  if (q) {
+    filtered = filtered.filter(c =>
+      c.ticker.toLowerCase().includes(q) ||
+      c.asset.toLowerCase().includes(q) ||
+      c.politicians.some(p => p.toLowerCase().includes(q))
+    );
+  }
+  renderClusters(filtered);
+}
+
+document.getElementById('searchBox').addEventListener('input', applyFilters);
+document.getElementById('minPolFilter').addEventListener('change', applyFilters);
+
+document.getElementById('loadBtn').addEventListener('click', () => {
+  document.getElementById('fileInput').click();
+});
+document.getElementById('fileInput').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (evt) => {
+    try {
+      const parsed = JSON.parse(evt.target.result);
+      currentData = parsed;
+      document.getElementById('dataLabel').textContent = 'Loaded: ' + file.name;
+      renderStats(currentData);
+      applyFilters();
+    } catch (err) {
+      alert('Could not parse that file as JSON: ' + err.message);
+    }
+  };
+  reader.readAsText(file);
+});
+
+renderStats(currentData);
+renderClusters(currentData);
+</script>
+</body>
+</html>
